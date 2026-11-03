@@ -411,15 +411,17 @@ class OptimizerStore:
             config=config,
         )
 
-        if (
-            is_inheritance_qs(qs)
-            and getattr(qs, "subclasses", None)
-            and getattr(qs, "_prefetch_related_lookups", ())
-        ):
-            qs._prefetch_related_objects = MethodType(  # type: ignore[method-assign]
-                _prefetch_inheritance_related_objects, qs
+        if is_inheritance_qs(qs) and getattr(qs, "subclasses", None):
+            # model-utils copies only names in _annotated to downcast objects.
+            # Its annotate() replaces that list, dropping earlier annotations.
+            qs._annotated = list(  # pyright: ignore[reportAttributeAccessIssue]
+                qs.query.annotation_select  # pyright: ignore[reportAttributeAccessIssue]
             )
-            get_queryset_config(qs).inheritance_prefetch = True
+            if getattr(qs, "_prefetch_related_lookups", ()):
+                qs._prefetch_related_objects = MethodType(  # type: ignore[method-assign]
+                    _prefetch_inheritance_related_objects, qs
+                )
+                get_queryset_config(qs).inheritance_prefetch = True
 
         return qs
 

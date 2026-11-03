@@ -1,6 +1,7 @@
 from typing import cast
 
 import strawberry
+from django.db.models import Value
 
 import strawberry_django
 from strawberry_django.optimizer import DjangoOptimizerExtension, optimize
@@ -26,6 +27,14 @@ from .models import (
 class ProjectType:
     topic: strawberry.auto
     notes: list["ProjectNoteType"]
+
+    @strawberry_django.field
+    def initial_label(self) -> str:
+        return self.preexisting_label  # pyright: ignore[reportAttributeAccessIssue]
+
+    @strawberry_django.field(annotate={"optimizer_label": Value("optimized")})
+    def computed_label(self) -> str:
+        return self.optimizer_label  # pyright: ignore[reportAttributeAccessIssue]
 
     @strawberry_django.field(only=("topic",))
     def topic_upper(self) -> str:
@@ -104,6 +113,13 @@ class Query:
     def cloned_projects(self, info: strawberry.Info) -> list[ProjectType]:
         queryset = optimize(Project.objects.all(), info=info)
         return cast("list[ProjectType]", queryset.filter(topic="First"))
+
+    @strawberry_django.field
+    def annotated_projects(self) -> list[ProjectType]:
+        return cast(
+            "list[ProjectType]",
+            Project.objects.annotate(preexisting_label=Value("initial")),
+        )
 
     projects_paginated: list[ProjectType] = strawberry_django.field(pagination=True)
     projects_offset_paginated: OffsetPaginated[ProjectType] = (
